@@ -1,0 +1,36 @@
+# Ambiente virtual
+venv/
+.env
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Streamlit
+.streamlit/secrets.toml
+*.zip
+data/
+cache/
+*.csv
+chroma_langchain_db/
+
+# Dados geoespaciais (Shapefiles)
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.csv
+
+# Dados grandes
+*.parquet
+*.geojson
+
+# Sistema
+.DS_Store
+Thumbs.db
