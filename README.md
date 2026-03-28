@@ -33,6 +33,22 @@ SCORE/
 │ ├── modelos.pdf
 │ └── Relatorio_Sprint1_AGROM2.pdf
 |
+|
+├── ShapeFiles
+│ ├── agricultores_agro_m2.cpg
+│ ├── agricultores_agro_m2.dbf
+│ ├── agricultores_agro_m2.prj
+│ ├── agricultores_agro_m2.shp
+│ └── agricultores_agro_m2.shx
+|
+|
+├── ShapeFiles_RF
+│ ├── agricultores_agro_m2.cpg
+│ ├── agricultores_agro_m2.dbf
+│ ├── agricultores_agro_m2.prj
+│ ├── agricultores_agro_m2.shp
+│ └── agricultores_agro_m2.shx
+|
 ├── chroma_langchain_db/
 │ ├── 26d5bb78-f1ea-4dfc-89f1-0df2de32c400/
 │ └── chroma.sqlite3
@@ -52,7 +68,7 @@ SCORE/
 
 ## 🚀 Como Executar
 
-### 1. Configuração do Ambiente
+### 1. Configuração do Ambiente em Ambiente LINUX/MAC
 
 ```bash
 # Entrar no repositório
@@ -72,26 +88,25 @@ pip3 install notebook
 # Instalar dependências
 pip install -r requirements.txt
 
+
+# Baixar ShapeFiles_RF do IBGE no Google Drive
+Link:https://drive.google.com/drive/folders/1vhEJVRJfVqSTy1nZcv8-MoXT0E8F8Np0?usp=sharing
+OBS.: Os arquivos devem estar dentro na Pasta ShapeFile_RF e essa pasta deve estar na raiz do projeto. 
+
+# Baixar ShapeFiles do IBGE no Google Drive
+Link:https://drive.google.com/drive/folders/1gBUbSqugtd6DZDHoQKH5ctnf40RMFE-A?usp=sharing
+OBS.: Os arquivos devem estar dentro na Pasta ShapeFile_RF e essa pasta deve estar na raiz do projeto. 
+
+# Baixar Datasets .csv do IBGE no Google Drive
+Link:https://drive.google.com/drive/folders/136zoQyQ9DODiK03KkIC7se77Gx4fDoDh?usp=sharing
+OBS.: Os arquivos devem estar  na raiz do projeto, eles não devem estar dentro de pastas.
+
+
+## 1️⃣ Executar o programa
+1. Execute o comando:
+streamlit run criar_dataset.py
+
 ```
-
-### 1️⃣ Configuração do Ambiente
-1. Crie e ative um ambiente virtual:
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux / Mac
-venv\Scripts\activate     # Windows
-
-### 2. Preparação dos Dados
-
-⚠️ **Importante**: Os dados CSV não estão incluídos no repositório por questões de privacidade e tamanho.
-
-Você precisa colocar os arquivos de dados na pasta `data/`:
-- `Agricultor.csv`
-- `data/Compradores.csv`  
-- `data/crop_yield.csv`
-- `data/Loan_default.csv`
-- `data/tabela_resumo_10000_linhas.csv`
-
 ### 3. Executar a Análise
 
 
