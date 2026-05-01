@@ -11,13 +11,12 @@ scipy
 langchain
 langchain-ollama
 langchain-chroma
-langchain_community
+langchain-community
 pypdf
-streamlit_folium
+streamlit-folium
 geopandas
 shapely
 folium
-streamlit_folium
 osmnx
 networkx
 joblib
