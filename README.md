@@ -1,236 +1,278 @@
-# 🌾 AGRO M2 — Dashboard de Saúde e Score Bidirecional
+# 🌾 AGRO M2 — Apoio à Decisão Logística com Score, Geolocalização e IA
 
 ## 📋 Descrição
-Este projeto tem como objetivo desenvolver um **dashboard bidimensional de score** para **agricultores e compradores**, utilizando indicadores financeiros, agrícolas e comportamentais. O projeto permite análise exploratória, visualização interativa e avaliação de confiabilidade e performance dos usuários.  
 
-O dashboard é construído em **Streamlit** e os cálculos iniciais podem ser feitos em **Jupyter Notebook**.
+Este projeto tem como objetivo desenvolver uma **Prova de Conceito de apoio à decisão logística** no contexto do agronegócio, integrando:
+
+- **score analítico de produtores**;
+- **geolocalização**;
+- **cálculo de rotas logísticas**;
+- **visualização interativa em mapa**;
+- **assistente de Inteligência Artificial com RAG local**.
+
+A solução foi implementada em **Streamlit** e utiliza dados tabulares, dados geoespaciais e modelos preditivos para apoiar a escolha de produtores a partir de um ponto de destino definido pelo usuário.
 
 ---
 
-## 🎯 Objetivos da Análise
-1. Avaliar a confiabilidade financeira e comportamental de agricultores e compradores.  
-2. Criar métricas de score bidimensional para tomada de decisão.  
-3. Visualizar clusters e relações entre variáveis-chave.  
-4. Facilitar análises exploratórias e relatórios interativos.
+## 🎯 Objetivos da Solução
+
+1. Apoiar a seleção de produtores a partir de um ponto de destino.
+2. Integrar **score analítico** e **viabilidade logística** em uma mesma análise.
+3. Permitir filtragem espacial por raio e por tipo de produto.
+4. Calcular rotas com base em **malha rodoviária e ferroviária**.
+5. Disponibilizar uma camada de **IA explicativa**, capaz de gerar insights e responder perguntas com base nos dados atuais e em documentos técnicos.
 
 ---
 
 ## 🏗️ Estrutura do Projeto
 
-```
-SCORE/
+```text
+AGRO_M2/
 │
-├── data/
-│ ├── Agricultor.csv
-│ ├── Compradores.csv
-| ├── AHP_Criterios_Comprador_Preenchido.xlsx
-│ ├── crop_yield.csv
-│ ├── Loan_default.csv
-│ └── tabela_resumo_10000_linhas.csv
-|
-├── docs/
-│ ├── Descrição Score Bi Direcional.docx.pdf
-│ ├── modelos.pdf
-│ └── Relatorio_Sprint1_AGROM2.pdf
-|
-|
-├── ShapeFiles
-│ ├── agricultores_agro_m2.cpg
-│ ├── agricultores_agro_m2.dbf
-│ ├── agricultores_agro_m2.prj
-│ ├── agricultores_agro_m2.shp
-│ └── agricultores_agro_m2.shx
-|
-|
-├── ShapeFiles_RF
-│ ├── agricultores_agro_m2.cpg
-│ ├── agricultores_agro_m2.dbf
-│ ├── agricultores_agro_m2.prj
-│ ├── agricultores_agro_m2.shp
-│ └── agricultores_agro_m2.shx
-|
-├── chroma_langchain_db/
-│ ├── 26d5bb78-f1ea-4dfc-89f1-0df2de32c400/
-│ └── chroma.sqlite3
+├── Last_version.py                  # Arquivo principal da aplicação
+├── mainChat.py                      # Camada de orquestração do chat com IA
+├── vectorChat.py                    # Camada RAG / base vetorial
+├── price.py                         # Faixas de preço por cultura
 │
-├── venv/ # Ambiente virtual
-├── app.py # Dashboard Streamlit
-├── Vendedor.ipynb # # Funções de APH + TOPSIS & ML Vendedor
-├── Comprador.ipynb # Funções de APH + TOPSIS & ML Comprador
-├── grafico_rendimento_por_cluster.png
-├── mainChat.py # Notebook principal de análise
-├── vectorChat.py # Notebook principal de análise
-├── classificador_comprador.pkl # Modelo de Classificação Comprador
-├── EDA.ipynb # Notebook de análise e pesquisa do uso da clusterização
-├── classificador_vendedor.pkl # Modelo de Classificação Vendedor
-└── requirements.txt
+├── df_agr.csv                       # Base principal dos agricultores
+├── classificador_vendedor.pkl       # Modelo preditivo do vendedor
+├── classificador_comprador.pkl      # Modelo do comprador (não usado no fluxo principal validado)
+│
+├── docs/                            # PDFs usados como contexto técnico da IA
+│   ├── arquivo_1.pdf
+│   ├── arquivo_2.pdf
+│   └── ...
+│
+├── chroma_langchain_db/             # Base vetorial persistida do Chroma
+│   ├── chroma.sqlite3
+│   └── ...
+│
+├── ShapeFiles/                      # Shapefiles dos agricultores
+│   ├── agricultores_agro_m2.cpg
+│   ├── agricultores_agro_m2.dbf
+│   ├── agricultores_agro_m2.prj
+│   ├── agricultores_agro_m2.shp
+│   └── agricultores_agro_m2.shx
+│
+├── ShapeFiles_RF/                   # Malha logística rodoviária e ferroviária
+│   ├── rod_trecho_rodoviario_l.cpg
+│   ├── rod_trecho_rodoviario_l.dbf
+│   ├── rod_trecho_rodoviario_l.prj
+│   ├── rod_trecho_rodoviario_l.shp
+│   ├── rod_trecho_rodoviario_l.shx
+│   ├── fer_trecho_ferroviario_l.cpg
+│   ├── fer_trecho_ferroviario_l.dbf
+│   ├── fer_trecho_ferroviario_l.prj
+│   ├── fer_trecho_ferroviario_l.shp
+│   └── fer_trecho_ferroviario_l.shx
+│
+├── EDA.ipynb                        # Notebook exploratório
+├── Vendedor.ipynb                   # Notebook do pipeline do vendedor
+├── Comprador.ipynb                  # Notebook do pipeline do comprador
+├── app.py                           # Arquivo existente no projeto, não utilizado no fluxo principal validado
+├── modais.py                        # Arquivo auxiliar/alternativo, não utilizado no fluxo principal validado
+└── requirements.txt                 # Dependências do projeto
 ```
 
-## 🚀 Como Executar
+---
 
-### 1. Configuração do Ambiente em Ambiente LINUX/MAC
+## 📥 Arquivos necessários para execução
+
+### 1. Shapefiles da malha logística
+
+Baixe os arquivos da malha rodoviária e ferroviária e coloque o conteúdo extraído dentro da pasta `ShapeFiles_RF/`, na raiz do projeto:
+
+[ShapeFiles_RF no Google Drive](https://drive.google.com/drive/folders/1vhEJVRJfVqSTy1nZcv8-MoXT0E8F8Np0?usp=sharing)
+
+### 2. Shapefiles dos agricultores
+
+Baixe os arquivos dos agricultores e coloque o conteúdo extraído dentro da pasta `ShapeFiles/`, na raiz do projeto:
+
+[ShapeFiles no Google Drive](https://drive.google.com/drive/folders/1gBUbSqugtd6DZDHoQKH5ctnf40RMFE-A?usp=sharing)
+
+### 3. Base de dados CSV
+
+Baixe os arquivos CSV e coloque-os **na raiz do projeto**, conforme a versão funcional validada:
+
+[Datasets CSV no Google Drive](https://drive.google.com/drive/folders/136zoQyQ9DODiK03KkIC7se77Gx4fDoDh?usp=sharing)
+
+> **Observação:** para a pipeline principal validada, o arquivo mais importante é o `df_agr.csv`.
+
+---
+
+## 🚀 Requisitos
+
+Antes de executar o projeto, é necessário ter instalado:
+
+- Python 3.10+
+- pip
+- ambiente virtual Python
+- Ollama
+- modelos Ollama:
+  - `llama3.2`
+  - `mxbai-embed-large`
+
+---
+
+## ⚙️ Configuração do ambiente
+
+### Linux / Mac
 
 ```bash
-# Entrar no repositório
-cd SCORE
+cd AGRO_M2
 
-# Criar ambiente virtual
-sudo apt update
-sudo apt install python3 python3-pip
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
+python3 -m venv venv
+source venv/bin/activate
+
 pip install --upgrade pip
-pip3 install notebook
-
-# ou
-.venv\Scripts\activate     # Windows
-
-# Instalar dependências
 pip install -r requirements.txt
-
-
-# Baixar ShapeFiles_RF do IBGE no Google Drive
-Link:https://drive.google.com/drive/folders/1vhEJVRJfVqSTy1nZcv8-MoXT0E8F8Np0?usp=sharing
-OBS.: Os arquivos devem estar dentro na Pasta ShapeFile_RF e essa pasta deve estar na raiz do projeto. 
-
-# Baixar ShapeFiles do IBGE no Google Drive
-Link:https://drive.google.com/drive/folders/1gBUbSqugtd6DZDHoQKH5ctnf40RMFE-A?usp=sharing
-OBS.: Os arquivos devem estar dentro na Pasta ShapeFile_RF e essa pasta deve estar na raiz do projeto. 
-
-# Baixar Datasets .csv do IBGE no Google Drive
-Link:https://drive.google.com/drive/folders/136zoQyQ9DODiK03KkIC7se77Gx4fDoDh?usp=sharing
-OBS.: Os arquivos devem estar  na raiz do projeto, eles não devem estar dentro de pastas.
-
-
-## 1️⃣ Executar o programa
-1. Execute o comando:
-streamlit run criar_dataset.py
-
-```
-### 3. Executar a Análise
-
-
-**Linux / Mac:**
-```Abra o Jupyter Notebook Vendedor:
-jupyter notebook Vendedor.ipynb
+pip install notebook
 ```
 
-**Linux / Mac:**
-```Abra o Jupyter Notebook Comprador:
-jupyter notebook Comprador.ipynb
-```
+### Windows PowerShell
 
-#### 🚀 Execução Automatizada (Recomendado)
-
-**Linux / Mac:**
-```bash
-source venv/bin/activate
-streamlit run app.py
-```
-
-**Linux / Mac:**
-```bash
-source venv/bin/activate
-streamlit run criar_dataset.py
-```
-
-**Linux / Mac:**
-```bash
-source venv/bin/activate
-jupyter notebook EDA.ipynb
-```
-
-**Windows PowerShell:**
 ```powershell
+python -m venv venv
 venv\Scripts\Activate.ps1
-streamlit run app.py
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install notebook
 ```
 
-**Windows CMD:**
+### Windows CMD
+
 ```cmd
+python -m venv venv
 venv\Scripts\activate.bat
-streamlit run app.py
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install notebook
 ```
 
-Os scripts automaticamente:
-- ✅ Verificam Python
-- ✅ Criam ambiente virtual
-- ✅ Instalam dependências
-- ✅ Iniciam aplicação Streamlit
+---
 
-📖 **Para mais detalhes, veja:** [SCRIPTS_README.md](SCRIPTS_README.md)
+## 🤖 Configuração da IA local com Ollama
 
-#### 📓 Execução Manual
+Instale o Ollama conforme o sistema operacional e, em seguida, baixe os modelos exigidos pelo projeto.
 
+### Modelos necessários
 
-**Jupyter Notebook Vendedor:**
 ```bash
+ollama pull llama3.2
+ollama pull mxbai-embed-large
+```
+
+### Verificação
+
+```bash
+ollama list
+```
+
+Se os dois modelos aparecerem na lista, a camada de IA local estará pronta para uso.
+
+---
+
+## ▶️ Como executar
+
+### Aplicação principal
+
+A versão funcional validada do projeto utiliza o arquivo `Last_version.py` como ponto de entrada principal:
+
+```bash
+streamlit run Last_version.py
+```
+
+### Notebooks auxiliares
+
+Caso queira explorar os notebooks do projeto:
+
+```bash
+jupyter notebook EDA.ipynb
 jupyter notebook Vendedor.ipynb
-```
-
-**Jupyter Notebook Comprador:**
-```bash
 jupyter notebook Comprador.ipynb
 ```
 
-**Aplicação Streamlit:**
-```bash
-streamlit run app.py
-```
+---
 
-**Jupyter Notebook Análise Exploratória:**
-```bash
-jupyter notebook EDA.ipynb
-```
+## 🧭 Fluxo de utilização pelo usuário
 
-## 📊 Funcionalidades
+1. O usuário define o **modal prioritário** na barra lateral.
+2. Em seguida, informa ou ajusta o **ponto de destino** por latitude e longitude.
+3. Também pode alterar o ponto clicando diretamente no mapa.
+4. Seleciona o **raio de busca** e os **produtos de interesse**.
+5. A aplicação filtra os agricultores compatíveis com os critérios.
+6. O modelo preditivo estima o **score** dos registros selecionados.
+7. O sistema calcula a **distância real na malha logística**.
+8. Os resultados são apresentados em **mapa** e **tabela consolidada**.
+9. Por fim, o usuário pode acionar o botão de insight ou utilizar o chat para obter uma recomendação explicada pela IA.
 
-### Jupyter Notebook
-- ✅ Análise exploratória completa
-- ✅ Visualizações estáticas e interativas
-- ✅ Testes estatísticos
-- ✅ Insights automáticos
+---
 
-### Aplicação Streamlit
-- ✅ Interface web interativa
-- ✅ Upload dos dataset .csv
-- ✅ Dashboards interativos
+## 📊 Principais funcionalidades
 
-## 📈 Principais Descobertas
+### Aplicação principal (`Last_version.py`)
 
-### A clusterização não mostrou-se um caminho bom para esta prova.
-- **Método AHP mostrou ser um caminho eficiente para a construção do Score**
+- Dashboard Streamlit operacional para análise logística de agricultores.
+- Filtro espacial por raio com atualização dinâmica do ponto de destino.
+- Visualização cartográfica com marcadores, área de abrangência e rotas.
+- Integração de malha multimodal com preferência entre rodovia e ferrovia.
+- Score preditivo aplicado aos agricultores mais relevantes do cenário.
+- Tabela consolidada com métricas de distância e composição modal da rota.
+- Assistente de IA para recomendação e interpretação do resultado final.
+- Estrutura de RAG local baseada em PDFs e embeddings persistidos.
 
+### Notebooks
 
-## 🛠️ Tecnologias Utilizadas
+- Análise exploratória de dados.
+- Estudos e testes metodológicos.
+- Desenvolvimento dos pipelines de vendedor e comprador.
+- Apoio à construção do score bidimensional.
 
-- **Python 3.8+**
-- **Pandas** - Manipulação de dados
-- **NumPy** - Computação numérica
-- **Matplotlib/Seaborn** - Visualizações estáticas
-- **Plotly** - Visualizações interativas
-- **Streamlit** - Interface web
-- **Jupyter** - Notebooks interativos
-- **Scipy** - Análises estatísticas
-- **Langchain** - Generative AI
-- **RAG** - AI Especialista
-- **OLLAMA** - Modelo de IA
+---
 
-## 📝 Metodologia
+## 🛠️ Tecnologias utilizadas
 
-1. **Carregamento**: Dados obtidos pelos Dataset .csv e .json
-2. **Limpeza**: Tratamento de valores ausentes e duplicatas
-3. **Exploração**: Análise descritiva e visual
-6. **Visualização**: Dashboards interativos
+- **Python**
+- **Pandas**
+- **NumPy**
+- **GeoPandas**
+- **Shapely**
+- **NetworkX**
+- **momepy**
+- **SciPy / KDTree**
+- **Folium**
+- **Streamlit**
+- **streamlit-folium**
+- **Joblib**
+- **LangChain**
+- **Chroma**
+- **Ollama**
+- **Jupyter Notebook**
+
+---
+
+## 📝 Observações importantes
+
+- O arquivo `app.py` existe no projeto, mas **não foi utilizado no fluxo principal validado**.
+- O arquivo `modais.py` foi analisado como alternativa, mas **não foi necessário** para a execução da versão funcional final, pois a solução utilizou shapefiles já baixados.
+- A execução da camada de IA depende do Ollama instalado e dos modelos corretos já baixados.
+- A pasta `docs/` deve conter os PDFs utilizados como contexto documental pela IA.
+- A pasta `chroma_langchain_db/` pode ser criada automaticamente na primeira indexação dos documentos.
+
+---
 
 ## 👥 Autores
 
 - **Mariano António Vunge- Vungel**
 - **Ana Laura Canassa Basseto - Ana Laura**
 
-## 📞 Contato
-
-- GitHub: [@marianovungel](https://github.com/marianovungel)
-- Portfólio: [Marinao_Portfólio](https://vungel.vercel.app/)
-
 ---
+
+## ✅ Versão validada da pipeline
+
+A pipeline funcional validada nesta versão utiliza os seguintes arquivos `.py`:
+
+- `Last_version.py`
+- `mainChat.py`
+- `vectorChat.py`
+- `price.py`
