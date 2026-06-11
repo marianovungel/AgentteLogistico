@@ -1,4 +1,3 @@
-import os
 import folium
 import geopandas as gpd
 import joblib
@@ -6,21 +5,276 @@ import momepy
 import networkx as nx
 import numpy as np
 import pandas as pd
-import plotly.express as px  # Atualmente não está sendo usado no fluxo principal
+import plotly.express as px
 import streamlit as st
 from scipy.spatial import KDTree
 from shapely.geometry import Point
 from streamlit_folium import st_folium
 
-from price import sacas  # Atualmente não está sendo usado diretamente neste arquivo
+# ============================================================
+# CONFIGURAÇÕES
+# ============================================================
+
+INPUT_CSV = "base_integrada_sprint4.csv"
+MODEL_PATH = "classificador_vendedor.pkl"
 
 
 # ============================================================
-# 1. CARREGAMENTO DA MALHA LOGÍSTICA
+# CONFIGURAÇÃO DA PÁGINA
 # ============================================================
-# Esta função lê os shapefiles de rodovia e ferrovia e os
-# consolida em uma única base geoespacial, adicionando uma
-# coluna "modal" para indicar o tipo de transporte.
+
+st.set_page_config(
+    page_title="AGRO M2 | Sprint 4",
+    page_icon="🌾",
+    layout="wide"
+)
+
+
+# ============================================================
+# ESTILO GLOBAL
+# ============================================================
+
+st.markdown(
+    """
+    <style>
+        .main {
+            background: linear-gradient(180deg, #0b1220 0%, #111827 100%);
+            color: #F9FAFB;
+        }
+
+        .block-container {
+            padding-top: 4rem;
+            padding-bottom: 2.5rem;
+            padding-left: 2.2rem;
+            padding-right: 2.2rem;
+            max-width: 1500px;
+        }
+
+        h1, h2, h3 {
+            color: #4CAF50 !important;
+            margin-bottom: 0.35rem !important;
+        }
+
+        section[data-testid="stSidebar"] {
+            background: #0f172a;
+        }
+
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+        section[data-testid="stSidebar"] .stNumberInput label,
+        section[data-testid="stSidebar"] .stSelectbox label,
+        section[data-testid="stSidebar"] .stMultiSelect label {
+            color: #4CAF50 !important;
+            font-weight: 600;
+        }
+
+        section[data-testid="stSidebar"] p,
+        section[data-testid="stSidebar"] .stMarkdown p,
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+            color: #4CAF50 !important;
+        }
+
+        .hero-box {
+            background: linear-gradient(135deg, #123524 0%, #1f6f43 100%);
+            padding: 1.55rem 1.65rem;
+            border-radius: 22px;
+            box-shadow: 0 12px 34px rgba(0,0,0,0.22);
+            border: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: 1.25rem;
+        }
+
+        .hero-title {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 0.45rem;
+            color: #F9FAFB;
+            line-height: 1.2;
+        }
+
+        .hero-subtitle {
+            font-size: 1.02rem;
+            color: #D1FAE5;
+            opacity: 0.95;
+            line-height: 1.45;
+        }
+
+        .kpi-card {
+            background: #16a34a;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 20px;
+            padding: 1.15rem 1.1rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+            min-height: 132px;
+        }
+
+        .kpi-label {
+            font-size: 0.92rem;
+            color: #E2E8F0;
+            margin-bottom: 0.55rem;
+        }
+
+        .kpi-value {
+            font-size: 1.95rem;
+            font-weight: 800;
+            color: #F9FAFB;
+            line-height: 1.1;
+        }
+
+        .kpi-help {
+            font-size: 0.83rem;
+            color: #E2E8F0;
+            margin-top: 0.55rem;
+            line-height: 1.35;
+        }
+
+        .best-card {
+            background: linear-gradient(135deg, #1F2937 0%, #0F172A 100%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 22px;
+            padding: 1.35rem 1.35rem 1.1rem 1.35rem;
+            box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+            margin-bottom: 1.25rem;
+            margin-top: 1.25rem;
+        }
+
+        .best-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #F9FAFB;
+            margin-bottom: 0.9rem;
+        }
+
+        .best-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.8rem;
+        }
+
+        .best-item {
+            background: rgba(255,255,255,0.035);
+            border-radius: 16px;
+            padding: 0.95rem 0.9rem;
+            min-height: 86px;
+        }
+
+        .best-item-label {
+            font-size: 0.82rem;
+            color: #9CA3AF;
+            margin-bottom: 0.28rem;
+        }
+
+        .best-item-value {
+            font-size: 1.04rem;
+            font-weight: 700;
+            color: #F9FAFB;
+            margin-top: 0.15rem;
+            line-height: 1.25;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
+        .badge-success {
+            background: rgba(34,197,94,0.15);
+            color: #86EFAC;
+            border: 1px solid rgba(34,197,94,0.28);
+        }
+
+        .badge-warning {
+            background: rgba(245,158,11,0.15);
+            color: #FCD34D;
+            border: 1px solid rgba(245,158,11,0.28);
+        }
+
+        .badge-danger {
+            background: rgba(239,68,68,0.15);
+            color: #FCA5A5;
+            border: 1px solid rgba(239,68,68,0.28);
+        }
+
+        .section-card {
+            background: #111827;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 20px;
+            padding: 1.15rem 1.15rem 1rem 1.15rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.16);
+            margin-top: 0.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.35rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            font-weight: 700;
+            padding-left: 0.9rem;
+            padding-right: 0.9rem;
+            border-radius: 10px 10px 0 0;
+        }
+
+        .stButton > button {
+            color: white;
+            background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+            border-radius: 12px;
+            border: none;
+            font-weight: 700;
+            padding: 0.65rem 1rem;
+        }
+
+        /* -----------------------------------------------------------------
+        ESTILIZAÇÃO DOS CARDS COMERCIAIS INTEGRADOS
+        ----------------------------------------------------------------- */
+        [data-testid="stMetric"] {
+            background-color: #1e293b !important; 
+            border: 1px solid #4CAF50 !important; 
+            border-radius: 8px !important;        
+            padding: 8px 12px !important;         
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2) !important;
+            text-align: center !important;
+        }
+        
+        [data-testid="stMetricLabel"] {
+            font-size: 13px !important;
+            color: #a1a1aa !important; 
+            font-weight: 600 !important;
+        }
+        
+        [data-testid="stMetricValue"] {
+            font-size: 18px !important; 
+            color: #4CAF50 !important;  
+            font-weight: bold !important;
+        }
+        
+        .card-id-caption {
+            font-size: 11px;
+            color: #cbd5e1;
+            text-align: center;
+            margin-top: -4px;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 1200px) {
+            .best-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# CARREGAMENTO DA MALHA LOGÍSTICA
+# ============================================================
+
 @st.cache_data
 def carregar_malha_logistica():
     rod = gpd.read_file("ShapeFiles_RF/rod_trecho_rodoviario_l.shp")
@@ -29,73 +283,47 @@ def carregar_malha_logistica():
     rod["modal"] = "rodoviario"
     fer["modal"] = "ferroviario"
 
-    malha = pd.concat(
-        [rod[["geometry", "modal"]], fer[["geometry", "modal"]]],
-        ignore_index=True
-    )
+    malhas = [
+        rod[["geometry", "modal"]],
+        fer[["geometry", "modal"]],
+    ]
+
+    malha = pd.concat(malhas, ignore_index=True)
     return malha
 
 
-# Carrega a malha logística uma única vez e mantém em cache
 malha_logistica = carregar_malha_logistica()
 
 
 # ============================================================
-# 2. ESTILIZAÇÃO DA INTERFACE STREAMLIT
+# SIDEBAR
 # ============================================================
-# Bloco CSS simples para personalizar aparência do dashboard.
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #0e1117;
-        color: #ffffff;
-    }
-    .stButton>button {
-        color: #ffffff;
-        background-color: #2e7d32;
-        border-radius: 5px;
-    }
-    .stTextInput>div>div>input {
-        color: #ffffff;
-    }
-    h1, h2, h3 {
-        color: #4CAF50 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
-
-# ============================================================
-# 3. CONFIGURAÇÃO DE PREFERÊNCIA DE MODAL
-# ============================================================
-# O usuário escolhe na barra lateral qual modal deseja priorizar
-# no cálculo das rotas.
 st.sidebar.subheader("Preferência de Transporte")
-modal_preferido = st.sidebar.selectbox(
-    "Modal Prioritário:",
-    ["rodoviario", "ferroviario"]
+
+opcoes_modal = {
+    "Rodoviário": "rodoviario",
+    "Ferroviário": "ferroviario",
+    "Hidroviário": "hidroviario",
+}
+
+modal_label = st.sidebar.selectbox(
+    "Modal prioritário",
+    list(opcoes_modal.keys())
 )
 
+modal_preferido = opcoes_modal[modal_label]
+
 
 # ============================================================
-# 4. CONSTRUÇÃO DO GRAFO LOGÍSTICO
+# GRAFO LOGÍSTICO
 # ============================================================
-# Converte a malha geoespacial em um grafo de rede, onde as
-# arestas recebem pesos diferentes conforme o modal preferido.
-# O modal não prioritário recebe uma penalização para tornar
-# sua escolha menos provável no menor caminho.
+
 @st.cache_resource
 def construir_grafo_dinamico(_malha, preferido):
-    # Reprojeta para um sistema métrico para cálculo de distâncias
     malha_proj = _malha.to_crs(epsg=3857)
-
-    # Converte a malha em grafo no modo primal (linhas viram arestas)
     G = momepy.gdf_to_nx(malha_proj, approach="primal")
 
-    # Penalização alta para desincentivar modal não prioritário
     penalidade_alta = malha_proj.geometry.length.max() * 10
 
     for u, v, k, data in G.edges(data=True, keys=True):
@@ -110,31 +338,22 @@ def construir_grafo_dinamico(_malha, preferido):
     return G
 
 
-# Grafo logístico utilizado nas rotas
 G_logistico = construir_grafo_dinamico(malha_logistica, modal_preferido)
 
 
 # ============================================================
-# 5. FUNÇÕES AUXILIARES DE ROTEAMENTO
+# FUNÇÕES DE ROTA
 # ============================================================
-# Dado um ponto, encontra o nó mais próximo no grafo usando KDTree.
+
 def encontrar_no_proximo(G, ponto):
     nodes_list = list(G.nodes)
     nodes_coords = np.array(nodes_list)
-
     tree = KDTree(nodes_coords)
-    dist, idx = tree.query([ponto.x, ponto.y])
+    _, idx = tree.query([ponto.x, ponto.y])
     return nodes_list[idx]
 
 
-# Calcula a rota mais curta entre origem e destino no grafo,
-# retornando:
-# - coordenadas da rota para desenhar no mapa
-# - distância total em km
-# - presença de rodovia e/ou ferrovia
-# - número de segmentos de cada modal
 def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
-    # Reprojeta pontos para sistema métrico
     origem_proj = gpd.GeoSeries([origem_geom], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
     destino_proj = gpd.GeoSeries([destino_geom], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
 
@@ -142,7 +361,6 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
     node_destino = encontrar_no_proximo(G, destino_proj)
 
     try:
-        # Menor caminho ponderado pelo peso calculado no grafo
         rota_nos = nx.shortest_path(G, node_origem, node_destino, weight="weight")
 
         caminho_coords = []
@@ -150,6 +368,7 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
         modais_na_rota = set()
         segmentos_rod = 0
         segmentos_fer = 0
+        segmentos_hid = 0
 
         for i in range(len(rota_nos) - 1):
             u, v = rota_nos[i], rota_nos[i + 1]
@@ -161,10 +380,11 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
 
             if modal == "rodoviario":
                 segmentos_rod += 1
-            else:
+            elif modal == "ferroviario":
                 segmentos_fer += 1
+            elif modal == "hidroviario":
+                segmentos_hid += 1
 
-            # Converte o ponto da rede para lat/lon para desenhar no mapa
             p_latlon = gpd.GeoSeries([Point(u[0], u[1])], crs="EPSG:3857").to_crs(epsg=4326).iloc[0]
             caminho_coords.append((p_latlon.y, p_latlon.x))
 
@@ -173,64 +393,42 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
             "dist_km": distancia_total_m / 1000,
             "tem_rodovia": "rodoviario" in modais_na_rota,
             "tem_ferrovia": "ferroviario" in modais_na_rota,
+            "tem_hidrovia": "hidroviario" in modais_na_rota,
             "n_rodovia": segmentos_rod,
             "n_ferrovia": segmentos_fer,
+            "n_hidrovia": segmentos_hid,
         }
 
     except Exception:
-        # Caso não seja possível calcular a rota, retorna estrutura vazia
         return {
             "coords": [],
             "dist_km": 0.0,
             "tem_rodovia": False,
             "tem_ferrovia": False,
+            "tem_hidrovia": False,
             "n_rodovia": 0,
             "n_ferrovia": 0,
+            "n_hidrovia": 0,
         }
 
 
 # ============================================================
-# 6. LEITURA DA BASE DE AGRICULTORES
+# DADOS E MODELO
 # ============================================================
-# Lê a base principal da aplicação.
-df_agr = pd.read_csv("df_agr.csv")
 
-# Cria GeoDataFrame a partir das colunas de longitude e latitude
-gdf = gpd.GeoDataFrame(
-    df_agr,
-    geometry=gpd.points_from_xy(df_agr.longitude, df_agr.latitude),
-    crs="EPSG:4326",
-)
-
-# Exporta para shapefile.
-# Observação: a leitura posterior considera que o shapefile já está
-# na pasta ShapeFiles. Aqui a exportação é mantida conforme o código original.
-gdf.to_file("agricultores_agro_m2.shp")
-
-# Teste de leitura da camada geográfica dos agricultores
-gdf_teste = gpd.read_file("ShapeFiles/agricultores_agro_m2.shp")
-
-
-# ============================================================
-# 7. CONFIGURAÇÃO PRINCIPAL DA INTERFACE
-# ============================================================
-st.title("Agro M2 - Análise Logística")
-
-
-# ============================================================
-# 8. CARREGAMENTO DO MODELO E DOS DADOS
-# ============================================================
-# Carrega o modelo de classificação do vendedor.
 @st.cache_resource
 def carregar_modelo():
-    return joblib.load("classificador_vendedor.pkl")
+    return joblib.load(MODEL_PATH)
 
 
-# Carrega novamente a base tabular e a camada geográfica.
 @st.cache_data
 def carregar_dados():
-    df_original = pd.read_csv("df_agr.csv")
-    gdf = gpd.read_file("ShapeFiles/agricultores_agro_m2.shp")
+    df_original = pd.read_csv(INPUT_CSV)
+    gdf = gpd.GeoDataFrame(
+        df_original.copy(),
+        geometry=gpd.points_from_xy(df_original.longitude, df_original.latitude),
+        crs="EPSG:4326",
+    )
     return df_original, gdf
 
 
@@ -239,68 +437,60 @@ df_agr, gdf_agricultores = carregar_dados()
 
 
 # ============================================================
-# 9. PARÂMETROS DE BUSCA NA SIDEBAR
+# UI HEADER
 # ============================================================
+
+st.markdown(
+    """
+    <div class="hero-box">
+        <div class="hero-title">🌾 AGRO M2 — Sprint 4</div>
+        <div class="hero-subtitle">
+            Integração executiva de <b>Score</b>, <b>Logística</b>, <b>Preço</b> e <b>Clima</b> para apoio à tomada de decisão do Trader.
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+# ============================================================
+# PARÂMETROS
+# ============================================================
+
 st.sidebar.header("Parâmetros do Trader")
 
-# Raio de busca em quilômetros
-raio_km = st.sidebar.number_input(
-    "Raio de busca (km)",
-    min_value=1,
-    max_value=500,
-    value=100
-)
+raio_km = st.sidebar.number_input("Raio de busca (km)", min_value=1, max_value=500, value=100)
+lat = st.sidebar.number_input("Latitude do destino", min_value=-90.0, max_value=90.0, value=-25.0)
+lon = st.sidebar.number_input("Longitude do destino", min_value=-180.0, max_value=180.0, value=-49.0)
 
-# Coordenadas do ponto de destino
-lat = st.sidebar.number_input(
-    "Latitude do destino",
-    min_value=-90.0,
-    max_value=90.0,
-    value=-25.0
-)
-lon = st.sidebar.number_input(
-    "Longitude do destino",
-    min_value=-180.0,
-    max_value=180.0,
-    value=-49.0
-)
-
-# Lista fixa de produtos disponíveis na base
 lista_produtos = ["Soja", "acucar", "cafe", "Milho", "arroz", "frutos", "vegetais"]
-
-# Seleção múltipla de produtos
 produtos_selecionados = st.sidebar.multiselect(
-    "Filtrar por Produtos:",
+    "Filtrar por produtos",
     options=lista_produtos,
     default=lista_produtos
 )
 
-# Ponto inicial do destino
 ponto_x_coord = (lat, lon)
-st.sidebar.write(f"Destino (Ponto X): {ponto_x_coord}")
+st.sidebar.markdown(
+    f"<span style='color: green;'>Destino: {ponto_x_coord}</span>",
+    unsafe_allow_html=True
+)
 
-# Mantém o ponto em session_state para permitir atualização via clique no mapa
 if "ponto_x_manual" not in st.session_state:
     st.session_state.ponto_x_manual = ponto_x_coord
 
 
 # ============================================================
-# 10. FILTROS DE PRODUTO E DISTÂNCIA
+# FILTROS
 # ============================================================
-# Filtra os agricultores com base nas colunas booleanas/indicadoras dos produtos.
+
 def filtrar_por_produto(gdf, selecionados):
     if not selecionados:
         return gdf
-
     mask = gdf[selecionados].any(axis=1)
     return gdf[mask].copy()
 
 
-# Aplica primeiro o filtro por produto para reduzir o volume do processamento espacial
-gdf_filtrado_prod = filtrar_por_produto(gdf_agricultores, produtos_selecionados)
-
-
-# Filtra os agricultores por raio de distância a partir do ponto de destino.
 def filtrar_por_raio(gdf, centro, raio_km):
     ponto_destino = Point(centro[1], centro[0])
 
@@ -310,13 +500,12 @@ def filtrar_por_raio(gdf, centro, raio_km):
 
     distancias = gdf_metros.distance(ponto_metros.iloc[0])
 
-    # Adiciona distância em linha reta até o ponto X
+    gdf = gdf.copy()
     gdf["distancia_x_km"] = distancias / 1000
-
     return gdf[gdf["distancia_x_km"] <= raio_km].copy()
 
 
-# Aplica o filtro espacial sobre o conjunto já filtrado por produto
+gdf_filtrado_prod = filtrar_por_produto(gdf_agricultores, produtos_selecionados)
 agricultores_no_raio = filtrar_por_raio(
     gdf_filtrado_prod,
     st.session_state.ponto_x_manual,
@@ -325,10 +514,211 @@ agricultores_no_raio = filtrar_por_raio(
 
 
 # ============================================================
-# 11. PROCESSAMENTO PRINCIPAL: SCORE + LOGÍSTICA + MAPA
+# FUNÇÕES SPRINT 4
 # ============================================================
+
+def garantir_colunas_sprint4(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    defaults = {
+        "produto_base": "desconhecido",
+        "preco_produto_base": np.nan,
+        "atratividade_preco": 0.5,
+        "macro_regiao_climatica": "desconhecida",
+        "precipitacao_7d": np.nan,
+        "temperatura_media_7d": np.nan,
+        "risco_climatico": "desconhecido",
+        "risco_climatico_score": -1,
+    }
+    for col, default_value in defaults.items():
+        if col not in df.columns:
+            df[col] = default_value
+    return df
+
+
+def normalizar_serie(series: pd.Series, invert=False, fill_value=0.5) -> pd.Series:
+    s = series.copy().astype(float)
+    if s.dropna().empty:
+        return pd.Series([fill_value] * len(s), index=s.index)
+
+    s_min = s.min()
+    s_max = s.max()
+
+    if np.isclose(s_min, s_max):
+        normalized = pd.Series([fill_value] * len(s), index=s.index)
+    else:
+        normalized = (s - s_min) / (s_max - s_min)
+
+    if invert:
+        normalized = 1 - normalized
+
+    return normalized.fillna(fill_value)
+
+
+def calcular_score_final_sprint4(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    df["score_norm"] = normalizar_serie(df["Score"])
+    df["logistica_norm"] = normalizar_serie(df["Dist_Real_KM"], invert=True)
+    df["preco_norm"] = normalizar_serie(df["atratividade_preco"])
+    df["clima_norm"] = normalizar_serie(df["risco_climatico_score"], invert=True, fill_value=0.5)
+
+    df["score_final_sprint4"] = (
+        0.40 * df["score_norm"] +
+        0.30 * df["logistica_norm"] +
+        0.20 * df["preco_norm"] +
+        0.10 * df["clima_norm"]
+    )
+
+    return df
+
+
+def mapear_contexto_climatico(valor: str) -> str:
+    mapa = {
+        "Baixo": "Favorável",
+        "Médio": "Moderado",
+        "Alto": "Desfavorável",
+        "Desconhecido": "Indefinido",
+        "baixo": "Favorável",
+        "medio": "Moderado",
+        "alto": "Desfavorável",
+        "desconhecido": "Indefinido",
+    }
+    return mapa.get(str(valor), str(valor))
+
+
+def preparar_tabela_exibicao(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    numeric_cols = [
+        "preco_produto_base",
+        "atratividade_preco",
+        "precipitacao_7d",
+        "temperatura_media_7d",
+        "distancia_x_km",
+        "Dist_Real_KM",
+        "Score",
+        "score_final_sprint4",
+    ]
+
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "macro_regiao_climatica" in df.columns:
+        df["macro_regiao_climatica"] = df["macro_regiao_climatica"].astype(str).str.title()
+
+    if "risco_climatico" in df.columns:
+        df["risco_climatico"] = (
+            df["risco_climatico"]
+            .astype(str)
+            .str.lower()
+            .replace({
+                "alto": "Alto",
+                "medio": "Médio",
+                "baixo": "Baixo",
+                "desconhecido": "Desconhecido",
+            })
+            .map(mapear_contexto_climatico)
+        )
+
+    if "ferrovia" in df.columns:
+        df["ferrovia"] = df["ferrovia"].map({True: "🚆 Sim", False: "—"}).fillna("—")
+
+    if "rodovia" in df.columns:
+        df["rodovia"] = df["rodovia"].map({True: "🛣️ Sim", False: "—"}).fillna("—")
+
+    if "hidrovia" in df.columns:
+        df["hidrovia"] = df["hidrovia"].map({True: "🚢 Sim", False: "—"}).fillna("—")
+
+    return df
+
+
+def risco_badge(risco: str) -> str:
+    risco = mapear_contexto_climatico(str(risco))
+    if risco == "Favorável":
+        return '<span class="badge badge-success">Favorável</span>'
+    if risco == "Moderado":
+        return '<span class="badge badge-warning">Moderado</span>'
+    if risco == "Desfavorável":
+        return '<span class="badge badge-danger">Desfavorável</span>'
+    return '<span class="badge badge-warning">Indefinido</span>'
+
+
+def render_kpi(label: str, value: str, help_text: str):
+    st.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-label">{label}</div>
+            <div class="kpi-value">{value}</div>
+            <div class="kpi-help">{help_text}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render_best_farmer_card(best_row: pd.Series):
+    contexto_climatico = mapear_contexto_climatico(str(best_row["risco_climatico"]))
+
+    modal_partes = []
+    if bool(best_row.get("ferrovia", False)):
+        modal_partes.append("🚆 Ferrovia")
+    if bool(best_row.get("rodovia", False)):
+        modal_partes.append("🛣️ Rodovia")
+    if bool(best_row.get("hidrovia", False)):
+        modal_partes.append("🚢 Hidrovia")
+
+    modal_texto = " | ".join(modal_partes) if modal_partes else "—"
+
+    st.markdown(
+        f"""
+        <div class="best-card">
+            <div class="best-title">🏆 Melhor alternativa recomendada no cenário atual — ID {int(best_row["ID"])}</div>
+            <div class="best-grid">
+                <div class="best-item">
+                    <div class="best-item-label">Produto</div>
+                    <div class="best-item-value">{best_row["produto_base"]}</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Score Final</div>
+                    <div class="best-item-value">{best_row["score_final_sprint4"]:.3f}</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Distância Real</div>
+                    <div class="best-item-value">{best_row["Dist_Real_KM"]:.2f} km</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Preço</div>
+                    <div class="best-item-value">R$ {best_row["preco_produto_base"]:.2f}</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Atratividade</div>
+                    <div class="best-item-value">{best_row["atratividade_preco"]:.3f}</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Macro Região</div>
+                    <div class="best-item-value">{str(best_row["macro_regiao_climatica"]).title()}</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Contexto Climático Regional</div>
+                    <div class="best-item-value">{contexto_climatico}</div>
+                </div>
+                <div class="best-item">
+                    <div class="best-item-label">Modal da rota</div>
+                    <div class="best-item-value">{modal_texto}</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# ============================================================
+# PROCESSAMENTO PRINCIPAL
+# ============================================================
+
 if not agricultores_no_raio.empty:
-    # Variáveis esperadas pelo modelo preditivo do vendedor
     colunas_ml = [
         "RFR_QTD",
         "TPN_QTD",
@@ -340,10 +730,9 @@ if not agricultores_no_raio.empty:
         "mean_valuation",
     ]
 
-    # Seleciona os 10 agricultores mais próximos do ponto informado
     top_10_distancia = agricultores_no_raio.sort_values(by="distancia_x_km").head(10).copy()
+    top_10_distancia = garantir_colunas_sprint4(top_10_distancia)
 
-    # Recupera os registros correspondentes para aplicar o modelo
     lista_ids = top_10_distancia["ID"].tolist()
     dados_para_ml = (
         df_agr[df_agr["ID"].isin(lista_ids)]
@@ -352,29 +741,25 @@ if not agricultores_no_raio.empty:
         .reset_index()
     )
 
-    # Prediz o score dos agricultores selecionados
     top_10_distancia["Score"] = modelo.predict(dados_para_ml[colunas_ml])
 
-    # Inicializa colunas logísticas que serão preenchidas pelo cálculo de rotas
     top_10_distancia["Dist_Real_KM"] = 0.0
     top_10_distancia["ferrovia"] = False
     top_10_distancia["rodovia"] = False
+    top_10_distancia["hidrovia"] = False
     top_10_distancia["n_ferrovia"] = 0
     top_10_distancia["n_rodovia"] = 0
+    top_10_distancia["n_hidrovia"] = 0
 
-    # ========================================================
-    # 11.1 CONSTRUÇÃO DO MAPA
-    # ========================================================
+    # MAPA
     m = folium.Map(location=st.session_state.ponto_x_manual, zoom_start=7)
 
-    # Marca o destino
     folium.Marker(
         st.session_state.ponto_x_manual,
         tooltip="Destino",
         icon=folium.Icon(color="red")
     ).add_to(m)
 
-    # Desenha o raio de busca
     folium.Circle(
         location=st.session_state.ponto_x_manual,
         radius=raio_km * 1000,
@@ -383,120 +768,290 @@ if not agricultores_no_raio.empty:
         fill_opacity=0.1
     ).add_to(m)
 
-    # Geometria do ponto de destino
     ponto_x_geom = Point(
         st.session_state.ponto_x_manual[1],
         st.session_state.ponto_x_manual[0]
     )
 
-    # ========================================================
-    # 11.2 CÁLCULO DE ROTAS E INSERÇÃO NO MAPA
-    # ========================================================
     for idx, row in top_10_distancia.iterrows():
-        # Marca o agricultor no mapa
+        popup_txt = (
+            f"ID: {row['ID']}<br>"
+            f"Produto: {row.get('produto_base', 'N/D')}<br>"
+            f"Dist. reta: {row['distancia_x_km']:.2f} km"
+        )
+
         folium.CircleMarker(
             location=[row.geometry.y, row.geometry.x],
-            radius=5,
-            color="green",
+            radius=6,
+            color="#22c55e",
             fill=True,
-            popup=f"ID: {row['ID']} - Dist Real: {row['distancia_x_km']:.2f}km",
+            fill_color="#22c55e",
+            fill_opacity=0.9,
+            popup=popup_txt,
         ).add_to(m)
 
-        # Calcula a rota logística entre agricultor e destino
         resultado = calcular_rota_real_detalhada(G_logistico, row.geometry, ponto_x_geom)
 
         if resultado:
-            # Preenche as métricas logísticas no dataframe final
             top_10_distancia.at[idx, "Dist_Real_KM"] = resultado["dist_km"]
             top_10_distancia.at[idx, "ferrovia"] = resultado["tem_ferrovia"]
             top_10_distancia.at[idx, "rodovia"] = resultado["tem_rodovia"]
+            top_10_distancia.at[idx, "hidrovia"] = resultado["tem_hidrovia"]
             top_10_distancia.at[idx, "n_ferrovia"] = resultado["n_ferrovia"]
             top_10_distancia.at[idx, "n_rodovia"] = resultado["n_rodovia"]
+            top_10_distancia.at[idx, "n_hidrovia"] = resultado["n_hidrovia"]
 
-            # Desenha a rota no mapa
             folium.PolyLine(
                 resultado["coords"],
-                color="blue",
-                weight=3,
-                opacity=0.7
+                color="#60A5FA",
+                weight=4,
+                opacity=0.75
             ).add_to(m)
 
-    # ========================================================
-    # 11.3 TABELA FINAL DE RESULTADOS
-    # ========================================================
-    st.subheader(f"🎯 Top {len(top_10_distancia)} Agricultores (Análise Logística Multimodal)")
+    # SCORE FINAL
+    top_10_distancia = calcular_score_final_sprint4(top_10_distancia)
+    top_10_distancia = top_10_distancia.sort_values(
+        by="score_final_sprint4",
+        ascending=False
+    ).reset_index(drop=True)
 
-    st.dataframe(
-        top_10_distancia[
-            [
-                "ID",
-                "distancia_x_km",
-                "Dist_Real_KM",
-                "Score",
-                "ferrovia",
-                "rodovia",
-                "n_ferrovia",
-                "n_rodovia",
-            ]
-        ],
-        use_container_width=True,
-    )
+    top_10_display = preparar_tabela_exibicao(top_10_distancia)
+    melhor = top_10_distancia.iloc[0]
 
-    # ========================================================
-    # 11.4 RENDERIZAÇÃO DO MAPA E CAPTURA DE CLIQUE
-    # ========================================================
-    mapa_output = st_folium(m, width=800, height=500)
+    contexto_climatico_topo = mapear_contexto_climatico(str(top_10_display["risco_climatico"].mode().iloc[0]))
+    precip_media = top_10_distancia["precipitacao_7d"].mean()
+    temp_media = top_10_distancia["temperatura_media_7d"].mean()
 
-    # Permite atualizar o ponto de destino clicando no mapa
-    if mapa_output["last_clicked"]:
-        nova_lat = mapa_output["last_clicked"]["lat"]
-        nova_lon = mapa_output["last_clicked"]["lng"]
-
-        if (nova_lat, nova_lon) != st.session_state.ponto_x_manual:
-            st.session_state.ponto_x_manual = (nova_lat, nova_lon)
-            st.rerun()
-
-    # ========================================================
-    # 11.5 BLOCO DE IA / CHAT
-    # ========================================================
-    # Importa a função que consulta o modelo de IA com contexto do dataframe atual
-    from mainChat import ask_chatbot
-
-    # Botão para gerar uma recomendação automática com IA
-    if st.button("🪄 Gerar Insight de Compra (IA)"):
-        insight_prompt = (
-            "Com base nos dados da tabela, faça uma análise comparativa "
-            "e recomende o melhor agricultor para compra hoje."
+    # KPIs
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    with c1:
+        render_kpi("Melhor Score Final", f"{melhor['score_final_sprint4']:.3f}", f"ID {int(melhor['ID'])}")
+    with c2:
+        render_kpi("Menor Distância Real", f"{top_10_distancia['Dist_Real_KM'].min():.2f} km", "Eficiência logística")
+    with c3:
+        render_kpi("Preço Médio", f"R$ {top_10_distancia['preco_produto_base'].mean():.2f}", "Origens filtradas")
+    with c4:
+        render_kpi(
+            "Contexto Climático Regional",
+            contexto_climatico_topo,
+            f"Precipitação 7d: {precip_media:.1f} mm | Temp. média: {temp_media:.1f} °C"
         )
-        with st.spinner("O Analista está analisando os cenários..."):
-            insight = ask_chatbot(insight_prompt, df_data=top_10_distancia)
-            st.info(insight)
 
-    # Inicializa histórico da conversa
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+    render_best_farmer_card(melhor)
 
+    # -----------------------------------------------------------------
+    # [INTEGRADO] SESSÃO DE CARDS DE MELHORES PREÇOS REAIS DO DF_AGR
+    # -----------------------------------------------------------------
+    st.markdown("### 💰 Oportunidades Comerciais (Melhores Preços do Top 10)")
+    
+    dados_comerciais = df_agr[df_agr['ID'].isin(lista_ids)].copy()
+    cards_info = []
+    
+    for prod in produtos_selecionados:
+        # Se houver coluna preco_Produto ou Produto, capturamos o menor valor
+        coluna_preco = f"preco_{prod}" if f"preco_{prod}" in dados_comerciais.columns else prod
+        
+        if coluna_preco in dados_comerciais.columns:
+            valid_rows = dados_comerciais[dados_comerciais[coluna_preco] > 0]
+            if not valid_rows.empty:
+                linha_menor = valid_rows.loc[valid_rows[coluna_preco].idxmin()]
+                cards_info.append({
+                    'produto': prod,
+                    'preco': float(linha_menor[coluna_preco]),
+                    'id': linha_menor['ID']
+                })
+
+    if cards_info:
+        campeao_geral = min(cards_info, key=lambda x: x['preco'])
+        cols = st.columns(len(cards_info) + 1)
+        
+        with cols[0]:
+            st.metric(label=f"🌟 GLOBAL ({campeao_geral['produto']})", value=f"R$ {campeao_geral['preco']:.2f}")
+            st.markdown(f"<div class='card-id-caption'>🏆 ID: {campeao_geral['id']}</div>", unsafe_allow_html=True)
+            
+        for i, info in enumerate(cards_info):
+            with cols[i + 1]:
+                st.metric(label=f"📉 {info['produto'].upper()}", value=f"R$ {info['preco']:.2f}")
+                st.markdown(f"<div class='card-id-caption'>📍 ID: {info['id']}</div>", unsafe_allow_html=True)
+    else:
+        st.warning("Nenhum dado de preço válido encontrado para os produtos selecionados no Top 10.")
+        
     st.divider()
-    st.title("🤖 Consultor Estratégico Agro M2")
+    
+    # Montamos o resumo em string para alimentar a Inteligência Artificial do Chatbot
+    resumo_precos_ia = "--- MENORES PREÇOS ENCONTRADOS POR PRODUTO ---\n"
+    if cards_info:
+        resumo_precos_ia += f"MELHOR PREÇO GLOBAL: {campeao_geral['produto']} por R$ {campeao_geral['preco']:.2f} (Produtor ID: {campeao_geral['id']})\n"
+        for info in cards_info:
+            resumo_precos_ia += f"- {info['produto'].upper()}: Menor preço R$ {info['preco']:.2f} (Produtor ID: {info['id']})\n"
+    else:
+        resumo_precos_ia += "Nenhum preço disponível.\n"
+    # -----------------------------------------------------------------
 
-    # Exibe histórico existente do chat
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    tab1, tab2, tab3 = st.tabs(["📊 Ranking", "🗺️ Mapa & Rotas", "🤖 IA"])
 
-    # Campo de entrada do usuário no chat
-    if prompt := st.chat_input("Ex: Qual o melhor agricultor considerando os dados que tem?"):
-        # Registra mensagem do usuário
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    with tab1:
+        st.markdown("### 📊 Ranking consolidado das alternativas")
 
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        colunas_exibicao = [
+            "ID",
+            "produto_base",
+            "preco_produto_base",
+            "atratividade_preco",
+            "macro_regiao_climatica",
+            "precipitacao_7d",
+            "temperatura_media_7d",
+            "risco_climatico",
+            "distancia_x_km",
+            "Dist_Real_KM",
+            "Score",
+            "score_final_sprint4",
+            "ferrovia",
+            "rodovia",
+            "hidrovia",
+            "n_ferrovia",
+            "n_rodovia",
+            "n_hidrovia",
+        ]
 
-        # Gera resposta da IA usando o dataframe atual como contexto
-        with st.chat_message("assistant"):
-            with st.spinner("IA analisando dados logísticos e score..."):
-                response = ask_chatbot(prompt, df_data=top_10_distancia)
-                st.markdown(response)
+        st.dataframe(
+            top_10_display[colunas_exibicao],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ID": st.column_config.NumberColumn("ID", format="%d"),
+                "produto_base": st.column_config.TextColumn("Produto"),
+                "preco_produto_base": st.column_config.NumberColumn("Preço", format="%.2f"),
+                "atratividade_preco": st.column_config.NumberColumn("Atratividade", format="%.3f"),
+                "macro_regiao_climatica": st.column_config.TextColumn("Macro Região"),
+                "precipitacao_7d": st.column_config.NumberColumn("Precipitação 7d", format="%.1f"),
+                "temperatura_media_7d": st.column_config.NumberColumn("Temp. Média 7d", format="%.1f"),
+                "risco_climatico": st.column_config.TextColumn("Contexto Climático"),
+                "distancia_x_km": st.column_config.NumberColumn("Distância Reta (km)", format="%.2f"),
+                "Dist_Real_KM": st.column_config.NumberColumn("Distância Real (km)", format="%.2f"),
+                "Score": st.column_config.NumberColumn("Score", format="%.2f"),
+                "score_final_sprint4": st.column_config.NumberColumn("Score Final", format="%.3f"),
+                "ferrovia": st.column_config.TextColumn("Ferrovia"),
+                "rodovia": st.column_config.TextColumn("Rodovia"),
+                "hidrovia": st.column_config.TextColumn("Hidrovia"),
+                "n_ferrovia": st.column_config.NumberColumn("Seg. Ferrovia", format="%d"),
+                "n_rodovia": st.column_config.NumberColumn("Seg. Rodovia", format="%d"),
+                "n_hidrovia": st.column_config.NumberColumn("Seg. Hidrovia", format="%d"),
+            },
+        )
 
-        # Armazena a resposta no histórico
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        ranking_top5 = top_10_distancia.head(5).copy()
+        ranking_top5["rank"] = range(1, len(ranking_top5) + 1)
+        ranking_top5["ranking_label"] = ranking_top5.apply(
+            lambda row: f'{row["rank"]}º • ID {int(row["ID"])}',
+            axis=1
+        )
+
+        fig = px.bar(
+            ranking_top5.sort_values("score_final_sprint4", ascending=True),
+            x="score_final_sprint4",
+            y="ranking_label",
+            orientation="h",
+            text="score_final_sprint4",
+            title="Top 5 produtores por Score Final"
+        )
+
+        fig.update_traces(
+            texttemplate="%{text:.3f}",
+            textposition="outside",
+            marker=dict(color="#22c55e")
+        )
+
+        fig.update_layout(
+            height=360,
+            margin=dict(l=20, r=20, t=55, b=20),
+            showlegend=False,
+            xaxis_title="Score Final",
+            yaxis_title="",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+
+        fig.update_xaxes(range=[0, 1], tickformat=".2f", showgrid=False)
+        fig.update_yaxes(showgrid=False)
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={"displaylogo": False}
+        )
+
+    with tab2:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown("### 🗺️ Mapa logístico e rotas calculadas")
+        mapa_output = st_folium(m, width=1200, height=580)
+
+        if mapa_output["last_clicked"]:
+            nova_lat = mapa_output["last_clicked"]["lat"]
+            nova_lon = mapa_output["last_clicked"]["lng"]
+
+            if (nova_lat, nova_lon) != st.session_state.ponto_x_manual:
+                st.session_state.ponto_x_manual = (nova_lat, nova_lon)
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with tab3:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.markdown("### 🤖 Consultor estratégico da Sprint 4")
+
+        from mainChat import ask_chatbot
+
+        col_a, col_b = st.columns([1, 1])
+        with col_a:
+            st.markdown("**Resumo do melhor cenário**")
+            st.markdown(
+                f"""
+                - **ID recomendado:** {int(melhor['ID'])}  
+                - **Produto:** {melhor['produto_base']}  
+                - **Score Final:** {melhor['score_final_sprint4']:.3f}  
+                - **Distância Real:** {melhor['Dist_Real_KM']:.2f} km  
+                - **Preço:** R$ {melhor['preco_produto_base']:.2f}  
+                - **Contexto Climático Regional:** {mapear_contexto_climatico(str(melhor['risco_climatico']))}
+                """
+            )
+
+        with col_b:
+            st.markdown("**Contexto climático predominante**")
+            st.markdown(risco_badge(str(melhor["risco_climatico"])), unsafe_allow_html=True)
+
+        # [ATUALIZADO] Botão de Insight agora recebe também o contexto comercial de menores preços
+        if st.button("🪄 Gerar Insight Integrado (IA)"):
+            insight_prompt = (
+                f"Com base nos dados logísticos e climáticos da tabela e neste resumo de mercado comercial:\n{resumo_precos_ia}\n"
+                "Faça uma análise completa integrando Score, Clima, Rota Geográfica e Preço Real da saca para recomendar a melhor compra."
+            )
+            with st.spinner("O Analista está integrando score, clima, preço e logística..."):
+                insight = ask_chatbot(insight_prompt, df_data=top_10_distancia)
+                st.info(insight)
+
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # [ATUALIZADO] Chat de entrada injeta dinamicamente o resumo comercial no Llama
+        if prompt := st.chat_input("Ex: Qual produtor apresenta melhor equilíbrio entre score, rota, clima e preço?"):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant"):
+                with st.spinner("IA analisando score, logística, preço e clima..."):
+                    prompt_com_precos = f"{resumo_precos_ia}\nPergunta do Trader: {prompt}"
+                    response = ask_chatbot(prompt_com_precos, df_data=top_10_distancia)
+                    st.markdown(response)
+
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+else:
+    st.warning("Nenhum agricultor encontrado para os filtros aplicados.")
