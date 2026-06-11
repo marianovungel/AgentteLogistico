@@ -58,12 +58,21 @@ st.markdown(
 
         section[data-testid="stSidebar"] {
             background: #0f172a;
-            color: white;
         }
 
-        section[data-testid="stSidebar"] label {
-            color: #E5F6EA !important;
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] [data-testid="stWidgetLabel"],
+        section[data-testid="stSidebar"] .stNumberInput label,
+        section[data-testid="stSidebar"] .stSelectbox label,
+        section[data-testid="stSidebar"] .stMultiSelect label {
+            color: green !important;
             font-weight: 600;
+        }
+
+        section[data-testid="stSidebar"] p,
+        section[data-testid="stSidebar"] .stMarkdown p,
+        section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+            color: green !important;
         }
 
         .hero-box {
@@ -241,16 +250,28 @@ st.markdown(
 
 @st.cache_data
 def carregar_malha_logistica():
+    """
+    Carrega a malha logística.
+    Se você possuir um shapefile hidroviário, pode descomentar o bloco
+    indicado abaixo para incluir o modal hidroviário de fato no grafo.
+    """
     rod = gpd.read_file("ShapeFiles_RF/rod_trecho_rodoviario_l.shp")
     fer = gpd.read_file("ShapeFiles_RF/fer_trecho_ferroviario_l.shp")
 
     rod["modal"] = "rodoviario"
     fer["modal"] = "ferroviario"
 
-    malha = pd.concat(
-        [rod[["geometry", "modal"]], fer[["geometry", "modal"]]],
-        ignore_index=True
-    )
+    malhas = [
+        rod[["geometry", "modal"]],
+        fer[["geometry", "modal"]],
+    ]
+
+    # Exemplo para usar hidrovia de verdade:
+    # hid = gpd.read_file("ShapeFiles_RF/hid_trecho_hidroviario_l.shp")
+    # hid["modal"] = "hidroviario"
+    # malhas.append(hid[["geometry", "modal"]])
+
+    malha = pd.concat(malhas, ignore_index=True)
     return malha
 
 
@@ -262,10 +283,19 @@ malha_logistica = carregar_malha_logistica()
 # ============================================================
 
 st.sidebar.subheader("Preferência de Transporte")
-modal_preferido = st.sidebar.selectbox(
+
+opcoes_modal = {
+    "Rodoviário": "rodoviario",
+    "Ferroviário": "ferroviario",
+    "Hidroviário": "hidroviario",
+}
+
+modal_label = st.sidebar.selectbox(
     "Modal prioritário",
-    ["rodoviario", "ferroviario"]
+    list(opcoes_modal.keys())
 )
+
+modal_preferido = opcoes_modal[modal_label]
 
 
 # ============================================================
@@ -321,6 +351,7 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
         modais_na_rota = set()
         segmentos_rod = 0
         segmentos_fer = 0
+        segmentos_hid = 0
 
         for i in range(len(rota_nos) - 1):
             u, v = rota_nos[i], rota_nos[i + 1]
@@ -332,8 +363,10 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
 
             if modal == "rodoviario":
                 segmentos_rod += 1
-            else:
+            elif modal == "ferroviario":
                 segmentos_fer += 1
+            elif modal == "hidroviario":
+                segmentos_hid += 1
 
             p_latlon = gpd.GeoSeries([Point(u[0], u[1])], crs="EPSG:3857").to_crs(epsg=4326).iloc[0]
             caminho_coords.append((p_latlon.y, p_latlon.x))
@@ -343,8 +376,10 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
             "dist_km": distancia_total_m / 1000,
             "tem_rodovia": "rodoviario" in modais_na_rota,
             "tem_ferrovia": "ferroviario" in modais_na_rota,
+            "tem_hidrovia": "hidroviario" in modais_na_rota,
             "n_rodovia": segmentos_rod,
             "n_ferrovia": segmentos_fer,
+            "n_hidrovia": segmentos_hid,
         }
 
     except Exception:
@@ -353,8 +388,10 @@ def calcular_rota_real_detalhada(G, origem_geom, destino_geom):
             "dist_km": 0.0,
             "tem_rodovia": False,
             "tem_ferrovia": False,
+            "tem_hidrovia": False,
             "n_rodovia": 0,
             "n_ferrovia": 0,
+            "n_hidrovia": 0,
         }
 
 
@@ -417,7 +454,10 @@ produtos_selecionados = st.sidebar.multiselect(
 )
 
 ponto_x_coord = (lat, lon)
-st.sidebar.write(f"Destino: {ponto_x_coord}")
+st.sidebar.markdown(
+    f"<span style='color: green;'>Destino: {ponto_x_coord}</span>",
+    unsafe_allow_html=True
+)
 
 if "ponto_x_manual" not in st.session_state:
     st.session_state.ponto_x_manual = ponto_x_coord
@@ -515,6 +555,20 @@ def calcular_score_final_sprint4(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def mapear_contexto_climatico(valor: str) -> str:
+    mapa = {
+        "Baixo": "Favorável",
+        "Médio": "Moderado",
+        "Alto": "Desfavorável",
+        "Desconhecido": "Indefinido",
+        "baixo": "Favorável",
+        "medio": "Moderado",
+        "alto": "Desfavorável",
+        "desconhecido": "Indefinido",
+    }
+    return mapa.get(str(valor), str(valor))
+
+
 def preparar_tabela_exibicao(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
@@ -547,6 +601,7 @@ def preparar_tabela_exibicao(df: pd.DataFrame) -> pd.DataFrame:
                 "baixo": "Baixo",
                 "desconhecido": "Desconhecido",
             })
+            .map(mapear_contexto_climatico)
         )
 
     if "ferrovia" in df.columns:
@@ -555,18 +610,21 @@ def preparar_tabela_exibicao(df: pd.DataFrame) -> pd.DataFrame:
     if "rodovia" in df.columns:
         df["rodovia"] = df["rodovia"].map({True: "🛣️ Sim", False: "—"}).fillna("—")
 
+    if "hidrovia" in df.columns:
+        df["hidrovia"] = df["hidrovia"].map({True: "🚢 Sim", False: "—"}).fillna("—")
+
     return df
 
 
 def risco_badge(risco: str) -> str:
-    risco = str(risco).lower()
-    if risco == "baixo":
-        return '<span class="badge badge-success">Baixo</span>'
-    if risco == "medio":
-        return '<span class="badge badge-warning">Médio</span>'
-    if risco == "alto":
-        return '<span class="badge badge-danger">Alto</span>'
-    return '<span class="badge badge-warning">Desconhecido</span>'
+    risco = mapear_contexto_climatico(str(risco))
+    if risco == "Favorável":
+        return '<span class="badge badge-success">Favorável</span>'
+    if risco == "Moderado":
+        return '<span class="badge badge-warning">Moderado</span>'
+    if risco == "Desfavorável":
+        return '<span class="badge badge-danger">Desfavorável</span>'
+    return '<span class="badge badge-warning">Indefinido</span>'
 
 
 def render_kpi(label: str, value: str, help_text: str):
@@ -583,6 +641,18 @@ def render_kpi(label: str, value: str, help_text: str):
 
 
 def render_best_farmer_card(best_row: pd.Series):
+    contexto_climatico = mapear_contexto_climatico(str(best_row["risco_climatico"]))
+
+    modal_partes = []
+    if bool(best_row.get("ferrovia", False)):
+        modal_partes.append("🚆 Ferrovia")
+    if bool(best_row.get("rodovia", False)):
+        modal_partes.append("🛣️ Rodovia")
+    if bool(best_row.get("hidrovia", False)):
+        modal_partes.append("🚢 Hidrovia")
+
+    modal_texto = " | ".join(modal_partes) if modal_partes else "—"
+
     st.markdown(
         f"""
         <div class="best-card">
@@ -613,14 +683,12 @@ def render_best_farmer_card(best_row: pd.Series):
                     <div class="best-item-value">{str(best_row["macro_regiao_climatica"]).title()}</div>
                 </div>
                 <div class="best-item">
-                    <div class="best-item-label">Risco Climático</div>
-                    <div class="best-item-value">{str(best_row["risco_climatico"]).title()}</div>
+                    <div class="best-item-label">Contexto Climático Regional</div>
+                    <div class="best-item-value">{contexto_climatico}</div>
                 </div>
                 <div class="best-item">
                     <div class="best-item-label">Modal da rota</div>
-                    <div class="best-item-value">
-                        {"🚆 Ferrovia" if best_row["ferrovia"] else ""}{" | " if best_row["ferrovia"] and best_row["rodovia"] else ""}{"🛣️ Rodovia" if best_row["rodovia"] else ""}
-                    </div>
+                    <div class="best-item-value">{modal_texto}</div>
                 </div>
             </div>
         </div>
@@ -657,11 +725,14 @@ if not agricultores_no_raio.empty:
     )
 
     top_10_distancia["Score"] = modelo.predict(dados_para_ml[colunas_ml])
+
     top_10_distancia["Dist_Real_KM"] = 0.0
     top_10_distancia["ferrovia"] = False
     top_10_distancia["rodovia"] = False
+    top_10_distancia["hidrovia"] = False
     top_10_distancia["n_ferrovia"] = 0
     top_10_distancia["n_rodovia"] = 0
+    top_10_distancia["n_hidrovia"] = 0
 
     # MAPA
     m = folium.Map(location=st.session_state.ponto_x_manual, zoom_start=7)
@@ -708,8 +779,10 @@ if not agricultores_no_raio.empty:
             top_10_distancia.at[idx, "Dist_Real_KM"] = resultado["dist_km"]
             top_10_distancia.at[idx, "ferrovia"] = resultado["tem_ferrovia"]
             top_10_distancia.at[idx, "rodovia"] = resultado["tem_rodovia"]
+            top_10_distancia.at[idx, "hidrovia"] = resultado["tem_hidrovia"]
             top_10_distancia.at[idx, "n_ferrovia"] = resultado["n_ferrovia"]
             top_10_distancia.at[idx, "n_rodovia"] = resultado["n_rodovia"]
+            top_10_distancia.at[idx, "n_hidrovia"] = resultado["n_hidrovia"]
 
             folium.PolyLine(
                 resultado["coords"],
@@ -728,6 +801,10 @@ if not agricultores_no_raio.empty:
     top_10_display = preparar_tabela_exibicao(top_10_distancia)
     melhor = top_10_distancia.iloc[0]
 
+    contexto_climatico_topo = mapear_contexto_climatico(str(top_10_display["risco_climatico"].mode().iloc[0]))
+    precip_media = top_10_distancia["precipitacao_7d"].mean()
+    temp_media = top_10_distancia["temperatura_media_7d"].mean()
+
     # KPIs
     c1, c2, c3, c4 = st.columns(4, gap="medium")
     with c1:
@@ -737,7 +814,11 @@ if not agricultores_no_raio.empty:
     with c3:
         render_kpi("Preço Médio", f"{top_10_distancia['preco_produto_base'].mean():.2f}", "Origens filtradas")
     with c4:
-        render_kpi("Risco Climático Médio", str(top_10_display['risco_climatico'].mode().iloc[0]), "Predominância do cenário")
+        render_kpi(
+            "Contexto Climático Regional",
+            contexto_climatico_topo,
+            f"Precipitação 7d: {precip_media:.1f} mm | Temp. média: {temp_media:.1f} °C"
+        )
 
     render_best_farmer_card(melhor)
 
@@ -761,8 +842,10 @@ if not agricultores_no_raio.empty:
             "score_final_sprint4",
             "ferrovia",
             "rodovia",
+            "hidrovia",
             "n_ferrovia",
             "n_rodovia",
+            "n_hidrovia",
         ]
 
         st.dataframe(
@@ -777,15 +860,17 @@ if not agricultores_no_raio.empty:
                 "macro_regiao_climatica": st.column_config.TextColumn("Macro Região"),
                 "precipitacao_7d": st.column_config.NumberColumn("Precipitação 7d", format="%.1f"),
                 "temperatura_media_7d": st.column_config.NumberColumn("Temp. Média 7d", format="%.1f"),
-                "risco_climatico": st.column_config.TextColumn("Risco Climático"),
+                "risco_climatico": st.column_config.TextColumn("Contexto Climático"),
                 "distancia_x_km": st.column_config.NumberColumn("Distância Reta (km)", format="%.2f"),
                 "Dist_Real_KM": st.column_config.NumberColumn("Distância Real (km)", format="%.2f"),
                 "Score": st.column_config.NumberColumn("Score", format="%.2f"),
                 "score_final_sprint4": st.column_config.NumberColumn("Score Final", format="%.3f"),
                 "ferrovia": st.column_config.TextColumn("Ferrovia"),
                 "rodovia": st.column_config.TextColumn("Rodovia"),
+                "hidrovia": st.column_config.TextColumn("Hidrovia"),
                 "n_ferrovia": st.column_config.NumberColumn("Seg. Ferrovia", format="%d"),
                 "n_rodovia": st.column_config.NumberColumn("Seg. Rodovia", format="%d"),
+                "n_hidrovia": st.column_config.NumberColumn("Seg. Hidrovia", format="%d"),
             },
         )
 
@@ -860,12 +945,12 @@ if not agricultores_no_raio.empty:
                 - **Score Final:** {melhor['score_final_sprint4']:.3f}  
                 - **Distância Real:** {melhor['Dist_Real_KM']:.2f} km  
                 - **Preço:** {melhor['preco_produto_base']:.2f}  
-                - **Risco Climático:** {str(melhor['risco_climatico']).title()}
+                - **Contexto Climático Regional:** {mapear_contexto_climatico(str(melhor['risco_climatico']))}
                 """
             )
 
         with col_b:
-            st.markdown("**Risco climático predominante**")
+            st.markdown("**Contexto climático predominante**")
             st.markdown(risco_badge(str(melhor["risco_climatico"])), unsafe_allow_html=True)
 
         if st.button("🪄 Gerar Insight Integrado (IA)"):
