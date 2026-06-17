@@ -670,48 +670,6 @@ def render_best_farmer_card(best_row: pd.Series):
 
     modal_texto = " | ".join(modal_partes) if modal_partes else "—"
 
-    st.markdown(
-        f"""
-        <div class="best-card">
-            <div class="best-title">🏆 Melhor alternativa recomendada no cenário atual — ID {int(best_row["ID"])}</div>
-            <div class="best-grid">
-                <div class="best-item">
-                    <div class="best-item-label">Produto</div>
-                    <div class="best-item-value">{best_row["produto_base"]}</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Score Final</div>
-                    <div class="best-item-value">{best_row["score_final_sprint4"]:.3f}</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Distância Real</div>
-                    <div class="best-item-value">{best_row["Dist_Real_KM"]:.2f} km</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Preço</div>
-                    <div class="best-item-value">R$ {best_row["preco_produto_base"]:.2f}</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Atratividade</div>
-                    <div class="best-item-value">{best_row["atratividade_preco"]:.3f}</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Macro Região</div>
-                    <div class="best-item-value">{str(best_row["macro_regiao_climatica"]).title()}</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Contexto Climático Regional</div>
-                    <div class="best-item-value">{contexto_climatico}</div>
-                </div>
-                <div class="best-item">
-                    <div class="best-item-label">Modal da rota</div>
-                    <div class="best-item-value">{modal_texto}</div>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 
 # ============================================================
